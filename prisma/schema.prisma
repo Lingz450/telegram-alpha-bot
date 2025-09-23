@@ -1,0 +1,109 @@
+// prisma/schema.prisma
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Alert {
+  id           String   @id @default(cuid())
+  chatId       String
+  userId       String
+  symbol       String
+  triggerPrice Decimal
+  direction    String   @default("either") // "either" | "above" | "below"
+  kind         String?                      // "price" | "ema_cross" | "rsi_threshold"
+  timeframe    String?                      // for ema/rsi kinds
+  period       Int?                         // for ema/rsi kinds
+  threshold    Float?                       // for rsi kind
+  lastSeen     Decimal?                     // <-- used to avoid firing immediately
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  @@index([chatId, active])
+  @@index([symbol])
+}
+
+model TradeCall {
+  id           String    @id @default(cuid())
+  chatId       String
+  userId       String
+  symbol       String
+  entry        Decimal
+  sl           Decimal
+  leverage     Int
+  tps          String
+  side         String    @default("long")   // "long" | "short"
+  status       String    @default("open")   // "open" | "filled" | "closed" | "cancelled"
+  filledPrice  Decimal?
+  closedPrice  Decimal?
+  srcMessageId String?
+  logMessageId String?
+  logChatId    String?
+  createdAt    DateTime  @default(now())
+  filledAt     DateTime?
+  closedAt     DateTime?
+
+  @@index([chatId])
+  @@index([symbol, status])
+}
+
+model ExecutedTrade {
+  id        String   @id @default(cuid())
+  chatId    String
+  userId    String
+  symbol    String
+  side      String
+  qty       Decimal
+  entry     Decimal
+  exit      Decimal?
+  fees      Decimal?
+  pnl       Decimal?
+  createdAt DateTime @default(now())
+  closedAt  DateTime?
+
+  @@index([chatId])
+  @@index([userId])
+  @@index([symbol])
+}
+
+model WalletPosition {
+  id        String   @id @default(cuid())
+  chatId    String
+  symbol    String
+  side      String
+  qty       Decimal
+  entry     Decimal
+  mark      Decimal?
+  updatedAt DateTime @updatedAt
+
+  @@index([chatId])
+  @@index([symbol])
+}
+
+model Giveaway {
+  id        String   @id @default(cuid())
+  chatId    String
+  prize     String
+  winners   Int      @default(1)
+  endsAt    DateTime
+  entrants  String   @default("")
+  resolved  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([chatId, resolved])
+}
+
+model WatchItem {
+  id        String   @id @default(cuid())
+  chatId    String
+  userId    String
+  symbol    String
+  createdAt DateTime @default(now())
+
+  @@unique([chatId, userId, symbol])
+  @@index([chatId, userId])
+}

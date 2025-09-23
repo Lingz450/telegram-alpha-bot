@@ -1,0 +1,40 @@
+{
+  "name": "telegram-alpha-bot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "//": "== Dev runners ==",
+    "dev": "npx --yes tsx src/index.ts",
+    "dev:tsnode": "node --loader ./node_modules/ts-node/esm.mjs --no-warnings src/index.ts",
+    "dev:tsx-loader": "node --loader tsx --no-warnings src/index.ts",
+
+    "//2": "== Build & run compiled ==",
+    "build": "tsc",
+    "start": "node dist/index.js",
+
+    "//3": "== Prisma ==",
+    "generate": "prisma generate",
+    "migrate": "prisma migrate dev"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.16.2",
+    "bottleneck": "^2.19.5",
+    "bullmq": "^5.58.7",
+    "ccxt": "^4.5.5",
+    "ioredis": "^5.7.0",
+    "pino": "^9.10.0",
+    "technicalindicators": "^3.1.0",
+    "telegraf": "^4.16.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.8",
+    "prisma": "^6.16.2",
+    "ts-node": "^10.9.2",
+    "tslib": "^2.8.1",
+    "tsx": "^4.20.5",
+    "typescript": "^5.6.3"
+  }
+}
