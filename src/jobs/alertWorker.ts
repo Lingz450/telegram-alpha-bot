@@ -12,7 +12,7 @@ type LogLike = { info?: Function; warn?: Function; error?: Function };
 const esc = (s: unknown) =>
   String(s).replace(/[&<>]/g, (m) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]!));
 
-/** True-cross helpers for price alerts */
+// ---- Cross helpers ----
 function crossedAbove(lastSeen: number, now: number, level: number) {
   return lastSeen < level && now >= level;
 }
@@ -24,19 +24,21 @@ function crossedEither(lastSeen: number, now: number, level: number) {
 }
 
 export function startAlertLoop(bot: Telegraf, cfg: Cfg, log: LogLike) {
-  // Keep one exchange instance around (ccxt manages rate limiting)
+  // Keep one exchange instance around
   const exPromise = Promise.resolve(makeExchange(cfg));
 
-  // Per-tick caches (cleared each sweep)
+  // Caches (cleared each tick)
   const klineCache = new Map<string, any[]>();
   const priceCache = new Map<string, number>();
+
+  // Local memory for last seen prices (since schema has no lastSeen column)
+  const lastSeenMap = new Map<string, number>();
 
   async function getTickerLast(symbol: string): Promise<number | null> {
     try {
       if (priceCache.has(symbol)) return priceCache.get(symbol)!;
       const ex = await exPromise;
       const t = await ticker(ex, symbol);
-      // more robust than just t.last
       const last = Number(
         t?.last ?? t?.close ?? t?.info?.last ?? t?.info?.c ?? t?.info?.price ?? NaN
       );
@@ -70,17 +72,13 @@ export function startAlertLoop(bot: Telegraf, cfg: Cfg, log: LogLike) {
         const now = await getTickerLast(a.symbol);
         if (now == null) continue;
 
-        // Arm first if lastSeen missing
-        const seen = a as any;
-        const lastSeenNum =
-          seen?.lastSeen != null ? Number(seen.lastSeen) : undefined;
+        const key = a.id;
+        const lastSeenNum = lastSeenMap.get(key);
 
+        // First observation → just arm it
         if (lastSeenNum == null || !Number.isFinite(lastSeenNum)) {
-          await prisma.alert.update({
-            where: { id: a.id },
-            data: { lastSeen: String(now) },
-          });
-          continue; // do not fire on first observation
+          lastSeenMap.set(key, now);
+          continue;
         }
 
         const dir = (a.direction || 'either') as 'above' | 'below' | 'either';
@@ -91,22 +89,18 @@ export function startAlertLoop(bot: Telegraf, cfg: Cfg, log: LogLike) {
             ? crossedBelow(lastSeenNum, now, trg)
             : crossedEither(lastSeenNum, now, trg);
 
-        // Always update lastSeen; only notify if we actually crossed
+        lastSeenMap.set(key, now);
+
         if (hit) {
           await prisma.alert.update({
             where: { id: a.id },
-            data: { active: false, lastSeen: String(now) },
+            data: { active: false },
           });
           const arrow = dir === 'above' ? '↑' : dir === 'below' ? '↓' : '↕';
           const msg = `🔔 <b>${esc(a.symbol)}</b> ${arrow} <code>${trg}</code> (last <code>${now}</code>)`;
           await bot.telegram
             .sendMessage(a.chatId, msg, { parse_mode: 'HTML' })
             .catch(() => {});
-        } else {
-          await prisma.alert.update({
-            where: { id: a.id },
-            data: { lastSeen: String(now) },
-          });
         }
       } catch (err) {
         log?.warn?.({ err }, 'price-alert');
@@ -114,12 +108,11 @@ export function startAlertLoop(bot: Telegraf, cfg: Cfg, log: LogLike) {
     }
   }
 
-  async function handleEMAAlerts(alerts: typeof prisma.alert._type extends never ? any[] : any[]) {
-    // group by (symbol, timeframe, period)
-    const groups = new Map<string, typeof alerts>();
+  async function handleEMAAlerts(alerts: any[]) {
+    const groups = new Map<string, any[]>();
     for (const a of alerts) {
       const key = `${a.symbol}|${a.timeframe}|${a.period}`;
-      (groups.get(key) || groups.set(key, [] as any).get(key)!).push(a);
+      (groups.get(key) || groups.set(key, []).get(key)!).push(a);
     }
 
     for (const [key, list] of groups) {
@@ -163,12 +156,11 @@ export function startAlertLoop(bot: Telegraf, cfg: Cfg, log: LogLike) {
     }
   }
 
-  async function handleRSIAlerts(alerts: typeof prisma.alert._type extends never ? any[] : any[]) {
-    // group by (symbol, timeframe, period)
-    const groups = new Map<string, typeof alerts>();
+  async function handleRSIAlerts(alerts: any[]) {
+    const groups = new Map<string, any[]>();
     for (const a of alerts) {
       const key = `${a.symbol}|${a.timeframe}|${a.period || 14}`;
-      (groups.get(key) || groups.set(key, [] as any).get(key)!).push(a);
+      (groups.get(key) || groups.set(key, []).get(key)!).push(a);
     }
 
     for (const [key, list] of groups) {
@@ -186,7 +178,6 @@ export function startAlertLoop(bot: Telegraf, cfg: Cfg, log: LogLike) {
         if (!val || !Number.isFinite(val)) continue;
 
         for (const a of list) {
-          // For RSI alerts we store direction as 'overbought' | 'oversold'
           const dir = (a.direction || 'overbought') as 'overbought' | 'oversold';
           const th = Number(a.threshold ?? (dir === 'overbought' ? 70 : 30));
           const hit = dir === 'overbought' ? val >= th : val <= th;
@@ -207,7 +198,6 @@ export function startAlertLoop(bot: Telegraf, cfg: Cfg, log: LogLike) {
   }
 
   async function checkOnce() {
-    // fresh per sweep
     klineCache.clear();
     priceCache.clear();
 

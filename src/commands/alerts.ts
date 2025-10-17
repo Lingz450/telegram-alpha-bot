@@ -4,8 +4,6 @@ import type { Cfg } from '../config';
 import { prisma } from '../db/prisma';
 import { normSymbol } from '../core/symbols';
 import { isAdmin } from '../core/permissions';
-import { makeExchange } from '../exchange/client';
-import { ticker } from '../exchange/marketData';
 
 /** Parse prices like: 65k, 1.25m, 0.0000321, 64,200 */
 function parseHumanPrice(input: string): number | null {
@@ -34,25 +32,13 @@ async function createAlert(ctx: Context, cfg: Cfg, symRaw: string, priceRaw: str
     return ctx.reply('Invalid price. Try: /alert BTC 65000 or $btc 65k');
   }
 
-  // Best-effort: arm lastSeen with the current price so the worker only fires on a real cross
-  let lastSeen: string | undefined;
-  try {
-    const ex = makeExchange(cfg);
-    const t = await ticker(ex, symbol);
-    const now = Number(t?.last ?? t?.close ?? t?.info?.last ?? t?.info?.c ?? NaN);
-    if (Number.isFinite(now)) lastSeen = String(now);
-  } catch {
-    // ignore; leave lastSeen undefined
-  }
-
   await prisma.alert.create({
     data: {
       chatId: String(ctx.chat?.id),
       userId: String(ctx.from?.id),
       symbol,
-      triggerPrice: String(priceNum),
-      direction: 'either', // 'above' | 'below' | 'either'
-      ...(lastSeen ? { lastSeen } : {}),
+      triggerPrice: String(priceNum), // store as string for Decimal
+      direction: 'either',            // above|below|either
     },
   });
 
@@ -71,7 +57,7 @@ export function registerAlerts(bot: Telegraf<Context>, cfg: Cfg, _log: any) {
   // 2) Quick style: "$btc 100000" or "btc 65k"
   bot.hears(/^\$?([A-Za-z0-9\-\/]{2,15})\s+([\d.,]+[kKmMbB]?)$/i, async (ctx, next) => {
     const text = (ctx.message as any)?.text || '';
-    if (text.startsWith('/')) return next(); // don't clash with slash commands
+    if (text.startsWith('/')) return next(); // skip slash commands
 
     const m = text.match(/^\$?([A-Za-z0-9\-\/]{2,15})\s+([\d.,]+[kKmMbB]?)$/i);
     if (!m) return next();

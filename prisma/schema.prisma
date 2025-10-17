@@ -19,7 +19,7 @@ model Alert {
   timeframe    String?                      // for ema/rsi kinds
   period       Int?                         // for ema/rsi kinds
   threshold    Float?                       // for rsi kind
-  lastSeen     Decimal?                     // <-- used to avoid firing immediately
+  lastSeen     Decimal?                     // used to avoid firing immediately
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
 

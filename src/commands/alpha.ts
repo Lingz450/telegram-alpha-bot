@@ -23,6 +23,8 @@ function nf(decimals: number) {
 function priceDp(p: number): number {
   if (!Number.isFinite(p) || p === 0) return 2;
   const abs = Math.abs(p);
+  if (abs >= 100000) return 0;
+  if (abs >= 10000) return 0;
   if (abs >= 1000) return 0;
   if (abs >= 100) return 1;
   if (abs >= 1) return 2;
@@ -40,41 +42,7 @@ function labelRSI(v: number) {
   return 'neutral';
 }
 
-function takeSummary(params: {
-  price: number;
-  ema50: number;
-  ema200: number;
-  rsiVal: number;
-  atrPct: number;
-}) {
-  const { price, ema50, ema200, rsiVal, atrPct } = params;
-  const uptrend = price >= ema200;
-  const momUp =
-    ema50 >= ema200 && ema50 >= price
-      ? false
-      : ema50 - ema200 >= 0 || price - ema50 >= 0;
-
-  // Simple human heuristics
-  if (uptrend && momUp && rsiVal < 70) {
-    if (atrPct < 0.7)
-      return 'Uptrend, steady momentum. Dips toward EMA50 look buyable; keep stops sensible.';
-    return 'Uptrend with juice. Momentum strong — consider buying pullbacks above EMA50.';
-  }
-  if (uptrend && !momUp) {
-    return 'Uptrend but momentum cooling. Safer to buy dips into EMA200; avoid chasing breakouts.';
-  }
-  if (!uptrend && !momUp) {
-    if (rsiVal < 35)
-      return 'Downtrend. Relief bounces likely, but rallies are for selling until back above EMA200.';
-    return 'Downtrend/weak. Consider fades into resistance; wait for confirmation to flip bias.';
-  }
-  if (!uptrend && momUp) {
-    return 'Attempting a turn. Look for higher lows and a reclaim of EMA200 to confirm trend change.';
-  }
-  return 'Mixed signals. Let price choose; trade level-to-level with tight risk.';
-}
-
-// Little helper: show typing while we work
+// keep the chat “typing…” while we compute
 function startTyping(ctx: Context) {
   const chatId = ctx.chat?.id!;
   let killed = false;
@@ -83,13 +51,25 @@ function startTyping(ctx: Context) {
     try { await ctx.telegram.sendChatAction(chatId, 'typing'); } catch {}
   };
   tick();
-  const iv = setInterval(tick, 4000); // Telegram clears chat action after ~5s
+  const iv = setInterval(tick, 4000);
   return () => { killed = true; clearInterval(iv); };
 }
 
-// Build the analysis text for a given symbol/timeframe (plain text)
+// --- sanity guard to avoid mismatched level scales (e.g., SOL levels on BTC) ---
+function levelsLookReasonable(price: number, low: number, high: number) {
+  if (!Number.isFinite(price) || !Number.isFinite(low) || !Number.isFinite(high)) return false;
+  if (low <= 0 || high <= 0 || low >= high) return false;
+  const span = high - low;
+  if (span <= 0) return false;
+  const mid = (low + high) / 2;
+  const ratio = price / Math.max(1, mid);
+  // very forgiving but catches obvious cross-symbol mistakes
+  return ratio > 0.2 && ratio < 5;
+}
+
+// -------- core builder --------
 async function buildAlphaText(cfg: Cfg, symbol: string, tf: string): Promise<string> {
-  const ex = makeExchange(cfg); // sync
+  const ex = makeExchange(cfg);
   const rows = await klines(ex, symbol, tf as any, 300);
   if (!rows?.length) throw new Error('no-data');
 
@@ -111,10 +91,10 @@ async function buildAlphaText(cfg: Cfg, symbol: string, tf: string): Promise<str
   const atrPct = price ? (atrVal / price) * 100 : 0;
 
   const span = Math.min(100, rows.length);
-  const recentHigh = Math.max(...highs.slice(-span));
-  const recentLow  = Math.min(...lows.slice(-span));
+  let recentHigh = Math.max(...highs.slice(-span));
+  let recentLow  = Math.min(...lows.slice(-span));
 
-  // Lightweight local pivots
+  // pivots
   const win = 6;
   const pivHi: number[] = [];
   const pivLo: number[] = [];
@@ -124,31 +104,48 @@ async function buildAlphaText(cfg: Cfg, symbol: string, tf: string): Promise<str
     if (highs[i] === Math.max(...segH)) pivHi.push(highs[i]);
     if (lows[i]  === Math.min(...segL)) pivLo.push(lows[i]);
   }
-  const nearRes = pivHi.length ? pivHi.at(-1)! : recentHigh;
-  const nearSup = pivLo.length ? pivLo.at(-1)! : recentLow;
+  let nearRes = pivHi.length ? pivHi.at(-1)! : recentHigh;
+  let nearSup = pivLo.length ? pivLo.at(-1)! : recentLow;
+
+  // sanity fallback if the range looks totally off for the current price
+  if (!levelsLookReasonable(price, recentLow, recentHigh)) {
+    const slice = closes.slice(-Math.min(120, closes.length));
+    const lo = Math.min(...slice);
+    const hi = Math.max(...slice);
+    recentLow = lo;
+    recentHigh = hi;
+    nearSup = lo;
+    nearRes = hi;
+  }
 
   const pretty = prettySymbol(symbol);
   const dp = priceDp(price);
   const n  = nf(dp);
   const n2 = nf(Math.min(4, Math.max(2, dp)));
+  const nRSI = nf(1);
 
-  const trend = price >= lastE200 ? 'Up' : 'Down';
-  const mom   = lastE50 >= lastE200 ? 'Rising' : (lastE50 <= lastE200 ? 'Falling' : 'Flat');
+  // concise take
+  const trend = price >= lastE200 ? 'Uptrend' : 'Downtrend';
+  const mom   = lastE50 >= lastE200 ? 'Momentum up' : 'Momentum weak';
+  const bias  = rsiVal > 70 ? 'Caution: overbought' : rsiVal < 30 ? 'Oversold bounce potential' : 'Neutral zone';
 
+  // simple, clean output; no runaway decimals
   const lines = [
-    `Alpha — ${pretty} (${tf})`,
-    `Price: ${n.format(price)}  (${price >= prev ? '+' : '-'}${n2.format(Math.abs(price - prev))})`,
-    `Trend: ${trend} (vs EMA200)`,
-    `Momentum: ${mom} (EMA50)`,
-    `RSI(14): ${rsiVal.toFixed(1)}  (${labelRSI(rsiVal)})`,
-    `ATR(14): ${n2.format(atrVal)}  (${n2.format(atrPct)}%)`,
-    `Levels:`,
-    `  Support ≈ ${n.format(nearSup)}   Resistance ≈ ${n.format(nearRes)}`,
-    `  Range ${span} bars: L=${n.format(recentLow)}  H=${n.format(recentHigh)}`,
-    '',
-    takeSummary({ price, ema50: lastE50, ema200: lastE200, rsiVal, atrPct }),
-    '',
-    '⚠️ Educational only. Not financial advice — manage risk.',
+    `📈 <b>${pretty}</b> (${tf})`,
+    ``,
+    `• <b>Price:</b> ${n.format(price)} (${price >= prev ? '+' : '−'}${n2.format(Math.abs(price - prev))})`,
+    `• <b>Trend:</b> ${trend} (vs EMA200)`,
+    `• <b>Momentum:</b> ${mom} (EMA50)`,
+    `• <b>RSI(14):</b> ${nRSI.format(rsiVal)} (${labelRSI(rsiVal)})`,
+    `• <b>ATR(14):</b> ${n2.format(atrVal)} (${n2.format(atrPct)}%)`,
+    ``,
+    `<b>Levels:</b>`,
+    `• Support ≈ ${n.format(nearSup)}`,
+    `• Resistance ≈ ${n.format(nearRes)}`,
+    `• Range: L=${n.format(recentLow)} / H=${n.format(recentHigh)}`,
+    ``,
+    `💡 <b>Take:</b> ${trend}, ${bias}.`,
+    `⚠️ <i>Educational only. DYOR.</i>`,
   ];
 
   return lines.join('\n');
@@ -156,17 +153,15 @@ async function buildAlphaText(cfg: Cfg, symbol: string, tf: string): Promise<str
 
 // -------- handler --------
 export function registerAlpha(bot: Telegraf<Context>, cfg: Cfg, _log: any) {
-  // Slash: /alpha BTC [ltf=1h]
+  // /alpha BTC [ltf=…]
   bot.command('alpha', async (ctx) => {
     const stopTyping = startTyping(ctx);
     try {
-      const text = ((ctx.message as any).text || '').trim();
-      const parts = text.split(/\s+/).slice(1);
+      const parts = ((ctx.message as any).text || '').split(/\s+/).slice(1);
       if (!parts.length) {
         stopTyping();
         return ctx.reply('Usage: /alpha BTC [ltf=5m|15m|1h|2h|4h|1d]');
       }
-
       const symRaw = parts[0];
       let tf = '1h';
       const tfArg = parts.find(p => /^ltf=/.test(p));
@@ -176,17 +171,15 @@ export function registerAlpha(bot: Telegraf<Context>, cfg: Cfg, _log: any) {
       }
 
       const symbol = normSymbol(symRaw, cfg.UNIVERSE_BASE);
-
-      // Quick placeholder → edit when ready
-      const ph = await ctx.reply(`Analyzing ${prettySymbol(symbol)} on ${tf}…`);
-
+      const ph = await ctx.reply(`👀 ${prettySymbol(symbol)} — checking…`);
       const msg = await buildAlphaText(cfg, symbol, tf);
       stopTyping();
       return ctx.telegram.editMessageText(
         ph.chat.id,
         ph.message_id,
         undefined,
-        msg
+        msg,
+        { parse_mode: 'HTML', disable_web_page_preview: true }
       );
     } catch {
       stopTyping();
@@ -202,15 +195,15 @@ export function registerAlpha(bot: Telegraf<Context>, cfg: Cfg, _log: any) {
       const tf = tfRaw && TF.has(tfRaw as any) ? tfRaw : '1h';
       const symbol = normSymbol(raw, cfg.UNIVERSE_BASE);
 
-      const ph = await ctx.reply(`Analyzing ${prettySymbol(symbol)} on ${tf}…`);
-
+      const ph = await ctx.reply(`👀 ${prettySymbol(symbol)} — checking…`);
       const msg = await buildAlphaText(cfg, symbol, tf);
       stopTyping();
       return ctx.telegram.editMessageText(
         ph.chat.id,
         ph.message_id,
         undefined,
-        msg
+        msg,
+        { parse_mode: 'HTML', disable_web_page_preview: true }
       );
     } catch {
       stopTyping();

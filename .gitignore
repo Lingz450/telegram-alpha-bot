@@ -22,3 +22,7 @@ prisma/*.db-journal
 Thumbs.db
 .vscode/
 .idea/
+
+
+#Ignore vscode AI rules
+.github\instructions\codacy.instructions.md
