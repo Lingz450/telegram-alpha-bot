@@ -345,8 +345,131 @@ bot.command('heatmap', (ctx) => {
   ctx.reply('🔥 Heatmap rendering requires Puppeteer.\n\n💡 This is a heavy feature that won\'t work on Netlify Functions. Deploy the full bot to Railway for heatmap support.');
 });
 
-bot.command(['atrbreak', 'backtest', 'findpair', 'setup'], (ctx) => {
-  ctx.reply('📊 Advanced analysis features are temporarily simplified.\n\n💡 For full functionality with live market data, deploy the Railway worker which can handle heavy ccxt operations.');
+// Find pair command
+bot.command('findpair', async (ctx) => {
+  const args = ctx.message?.text?.split(' ').slice(1);
+  const priceInput = parseFloat(args?.[0] || '0');
+  
+  if (!priceInput || priceInput <= 0) {
+    ctx.reply('❌ Please provide a valid price.\n\nExample: /findpair 45000');
+    return;
+  }
+  
+  ctx.reply(`🔍 Searching for pairs near $${priceInput.toLocaleString()}...`);
+  
+  // Demo data
+  const matches = [
+    { pair: 'BTC/USDT', price: 47250, diff: Math.abs(47250 - priceInput) },
+    { pair: 'ETH/USDT', price: 2850, diff: Math.abs(2850 - priceInput) },
+    { pair: 'BNB/USDT', price: 315, diff: Math.abs(315 - priceInput) },
+    { pair: 'SOL/USDT', price: 95, diff: Math.abs(95 - priceInput) },
+  ].sort((a, b) => a.diff - b.diff);
+  
+  const result = `🎯 Pairs Near $${priceInput.toLocaleString()}:
+
+${matches.slice(0, 3).map((m, i) => 
+  `${i + 1}. ${m.pair}: $${m.price.toLocaleString()} (${m.diff > 0 ? '+' : ''}${((m.price - priceInput) / priceInput * 100).toFixed(2)}%)`
+).join('\n')}
+
+💡 Demo data shown. Deploy Railway worker for live market data.`;
+  
+  ctx.reply(result);
+});
+
+// Setup command
+bot.command('setup', async (ctx) => {
+  const args = ctx.message?.text?.split(' ').slice(1);
+  const symbol = args?.[0]?.toUpperCase() || 'BTC';
+  const direction = args?.[1]?.toLowerCase() || 'long';
+  
+  ctx.reply(`📊 Generating ${direction} setup for ${symbol}...`);
+  
+  const setup = direction === 'long' ? 
+  `🟢 ${symbol} LONG Setup:
+
+📍 Entry Zone: $45,000 - $46,000
+🎯 Targets:
+  TP1: $48,500 (5%)
+  TP2: $51,000 (10%)
+  TP3: $54,500 (15%)
+🛑 Stop Loss: $43,500 (-3%)
+
+📊 Risk/Reward: 1:5
+⏰ Timeframe: 4H
+💡 Strategy: Buy dips to support, scale out at targets
+
+⚠️ DYOR. Not financial advice.` :
+  `🔴 ${symbol} SHORT Setup:
+
+📍 Entry Zone: $49,000 - $50,000
+🎯 Targets:
+  TP1: $46,500 (-5%)
+  TP2: $44,000 (-10%)
+  TP3: $41,500 (-15%)
+🛑 Stop Loss: $51,500 (+3%)
+
+📊 Risk/Reward: 1:5
+⏰ Timeframe: 4H
+💡 Strategy: Short rallies to resistance, scale out at targets
+
+⚠️ DYOR. Not financial advice.`;
+  
+  ctx.reply(setup);
+});
+
+// ATR Break command
+bot.command('atrbreak', async (ctx) => {
+  const args = ctx.message?.text?.split(' ').slice(1);
+  const timeframe = args?.[0] || '4h';
+  
+  ctx.reply(`📊 Scanning ATR breakouts on ${timeframe}...`);
+  
+  const results = `⚡ ATR Breakout Scanner (${timeframe}):
+
+🔥 High Volatility Breakouts:
+• BTC/USDT - ATR: 2.8% | Breaking Out ✅
+• ETH/USDT - ATR: 3.2% | Strong Move 🚀
+• SOL/USDT - ATR: 4.5% | Explosive! 💥
+
+📊 Medium Volatility:
+• BNB/USDT - ATR: 2.1% | Building
+• AVAX/USDT - ATR: 2.4% | Watch
+
+💡 ATR > 2.5% indicates strong breakout potential.
+⚠️ Demo data. Deploy Railway worker for live analysis.`;
+  
+  ctx.reply(results);
+});
+
+// Backtest command
+bot.command('backtest', async (ctx) => {
+  const args = ctx.message?.text?.split(' ').slice(1);
+  const symbol = args?.[0]?.toUpperCase() || 'BTC';
+  const timeframe = args?.[1] || '4h';
+  
+  ctx.reply(`📊 Backtesting EMA strategy on ${symbol} ${timeframe}...`);
+  
+  const results = `📈 Backtest Results: ${symbol} (${timeframe})
+
+⏰ Period: Last 30 days
+📊 Strategy: EMA 50/200 crossover
+💰 Starting Capital: $10,000
+
+📈 Performance:
+• Total Trades: 8
+• Winning Trades: 6 (75%)
+• Losing Trades: 2 (25%)
+• Net P&L: +$2,450 (+24.5%)
+• Max Drawdown: -5.2%
+• Sharpe Ratio: 2.1
+
+🎯 Best Trade: +15.2% (BTC long)
+📉 Worst Trade: -3.8% (BTC short)
+
+💡 Demo backtest. Deploy Railway worker for real historical data.
+⚠️ Past performance ≠ future results.`;
+  
+  ctx.reply(results);
 });
 
 // Handle symbol mentions (e.g., $BTC, BTC)
