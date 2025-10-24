@@ -1,8 +1,8 @@
 [build]
-  command = "npm run build"
-  publish = "dist"
+  # No site build needed; we only deploy Netlify Functions.
+  command = "echo skip build"
+  publish = "."
   functions = "netlify/functions"
 
 [functions]
   node_bundler = "esbuild"
-
