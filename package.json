@@ -25,7 +25,7 @@
     "dayjs": "^1.11.18",
     "http-proxy-agent": "^7.0.2",
     "https-proxy-agent": "^7.0.5",
-    "node-fetch": "^3.3.2",
+    "node-fetch": "^2.6.9",
     "ioredis": "^5.7.0",
     "protobufjs": "^7.2.6",
     "pino": "^9.10.0",
