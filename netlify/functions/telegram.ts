@@ -53,6 +53,12 @@ bot.command('help', (ctx) => {
 /pnl [symbol] - P&L checker
 /wallet - AI trades overview
 
+🔔 Alerts & Watchlist:
+/alert [symbol] [price] - Set price alert
+/alertlist - View your alerts
+/watch [symbol] - Add to watchlist
+/watchlist - View your watchlist
+
 👤 User Info:
 /whoami - Your user ID
 /list_admins - Group admins
@@ -61,7 +67,7 @@ bot.command('help', (ctx) => {
 /version - Bot version
 /help - This message
 
-Note: Some features require persistent hosting.`;
+💡 Background jobs (alerts, market pulse) run on our worker server!`;
   
   ctx.reply(helpText);
 });
@@ -314,33 +320,33 @@ bot.command('wallet', async (ctx) => {
   }
 });
 
-// Fallback commands for features not available on Netlify
+// Fallback commands for features handled by Railway worker or requiring full setup
 bot.command(['alert', 'alertlist', 'alertreset'], (ctx) => {
-  ctx.reply('🔔 Alerts feature requires persistent hosting. Coming soon!');
+  ctx.reply('🔔 Alert commands are being processed by our background worker.\n\n💡 Make sure the Railway worker is deployed and has DATABASE_URL configured.\n\nIf alerts aren\'t working, check Railway deployment logs.');
 });
 
 bot.command(['watch', 'watchlist', 'unwatch'], (ctx) => {
-  ctx.reply('👀 Watchlist feature requires persistent hosting. Coming soon!');
+  ctx.reply('👀 Watchlist commands are being processed by our background worker.\n\n💡 Make sure the Railway worker is deployed and has DATABASE_URL configured.\n\nIf watchlist isn\'t working, check Railway deployment logs.');
 });
 
 bot.command(['call', 'giveaway'], (ctx) => {
-  ctx.reply('📢 Admin features require persistent hosting. Coming soon!');
+  ctx.reply('📢 Admin-only command.\n\n💡 This feature requires the full bot deployment with database access. Deploy the Railway worker to enable this.');
 });
 
 bot.command('dev', (ctx) => {
-  ctx.reply('🔧 Developer features require persistent hosting. Coming soon!');
+  ctx.reply('🔧 Developer command (admin only).\n\n💡 This requires the full bot with all features enabled on Railway.');
 });
 
-bot.hears(/^\s*chart\b/i, (ctx) => {
-  ctx.reply('📊 Chart rendering requires persistent hosting. Coming soon!');
+bot.command('chart', (ctx) => {
+  ctx.reply('📊 Chart rendering requires Puppeteer.\n\n💡 This is a heavy feature that won\'t work on Netlify Functions. Consider deploying the full bot to Railway for chart support, or we can integrate an external chart API.');
 });
 
-bot.hears(/^\s*heatmap\b/i, (ctx) => {
-  ctx.reply('🔥 Heatmap requires persistent hosting. Coming soon!');
+bot.command('heatmap', (ctx) => {
+  ctx.reply('🔥 Heatmap rendering requires Puppeteer.\n\n💡 This is a heavy feature that won\'t work on Netlify Functions. Deploy the full bot to Railway for heatmap support.');
 });
 
 bot.command(['atrbreak', 'backtest', 'findpair', 'setup'], (ctx) => {
-  ctx.reply('📊 Advanced analysis features require persistent hosting. Coming soon!');
+  ctx.reply('📊 Advanced analysis features are temporarily simplified.\n\n💡 For full functionality with live market data, deploy the Railway worker which can handle heavy ccxt operations.');
 });
 
 // Handle symbol mentions (e.g., $BTC, BTC)

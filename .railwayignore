@@ -1,0 +1,41 @@
+# Railway ignore file
+# Files to exclude from Railway deployment
+
+# Development
+node_modules/
+.env.local
+.env.development
+
+# Build outputs (Railway will build fresh)
+dist/
+
+# Netlify specific
+netlify/
+netlify.toml
+.netlify/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Prisma dev database (use production DB URL in Railway)
+prisma/dev.db
+prisma/dev.db-journal
+
+# Scripts
+scripts/
+
