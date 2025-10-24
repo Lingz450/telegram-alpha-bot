@@ -25,6 +25,9 @@ bot.catch((err, ctx) => {
   log.error({ err: msg, update: ctx.update }, 'telegraf error');
 });
 
+// Quick sanity command to verify deploy version
+bot.command('version', (ctx) => ctx.reply('netlify:function v2'));
+
 // Register a safe subset of commands for serverless
 registerLiteCommands(bot, cfg, log);
 
