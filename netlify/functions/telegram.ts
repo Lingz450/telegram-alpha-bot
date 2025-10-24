@@ -10,7 +10,9 @@ import { registerLiteCommands } from '../../src/netlify/registerLiteCommands';
 
 const log = pino({ level: process.env.LOG_LEVEL || 'info', base: undefined });
 
-const cfg = loadConfig();
+const baseCfg = loadConfig();
+// Constrain universe and intervals for serverless execution
+const cfg = { ...baseCfg, UNIVERSE_LIMIT: Math.min(baseCfg.UNIVERSE_LIMIT || 500, 50) } as typeof baseCfg;
 if (!cfg.TELEGRAM_BOT_TOKEN) {
   throw new Error('TELEGRAM_BOT_TOKEN missing');
 }

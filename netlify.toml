@@ -6,6 +6,14 @@
 
 [functions]
   node_bundler = "esbuild"
+  external_node_modules = [
+    "ccxt",
+    "http-proxy-agent",
+    "https-proxy-agent",
+    "socks-proxy-agent",
+    "protobufjs",
+    "node-fetch"
+  ]
 
 # Clean webhook path so your function isn't exposed
 [[redirects]]

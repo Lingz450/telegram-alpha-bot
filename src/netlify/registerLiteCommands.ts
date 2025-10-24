@@ -9,6 +9,7 @@ import { registerHelp } from '../commands/help';
 import { registerWhoAmI } from '../commands/whoami';
 import { registerListAdmins } from '../commands/list_admins';
 
+// Market-data commands (ccxt) — enabled here, but be mindful of function timeouts
 import { registerAlpha } from '../commands/alpha';
 import { registerEMA } from '../commands/ema';
 import { registerRSI } from '../commands/rsi';
@@ -20,6 +21,7 @@ import { registerPnL } from '../commands/pnl';
 import { registerSetup } from '../commands/setup';
 import { registerTopMovers } from '../commands/topmovers';
 import { registerScore } from '../commands/score';
+import { registerPulse } from '../commands/pulse';
 import { registerWallet } from '../commands/wallet';
 
 export function registerLiteCommands(
@@ -33,7 +35,7 @@ export function registerLiteCommands(
   registerWhoAmI(bot);
   registerListAdmins(bot, cfg);
 
-  // Analysis/scanners using ccxt + indicators
+  // Market analysis/scanners (ccxt)
   registerAlpha(bot, cfg, log);
   registerEMA(bot, cfg, log);
   registerRSI(bot, cfg, log);
@@ -47,13 +49,14 @@ export function registerLiteCommands(
   registerSetup(bot, cfg, log);
   registerTopMovers(bot, cfg, log);
   registerScore(bot, cfg, log);
+  registerPulse(bot, cfg, log);
   registerWallet(bot, cfg, log);
 
   // Netlify limitations: provide gentle fallbacks for heavy features
-  bot.hears(/^chart\b/i, (ctx) =>
+  bot.hears(/^\s*chart\b/i, (ctx) =>
     ctx.reply('Chart rendering is unavailable in the demo environment.')
   );
-  bot.hears(/^heatmap\b/i, (ctx) =>
+  bot.hears(/^\s*heatmap\b/i, (ctx) =>
     ctx.reply('Order book heatmap is unavailable in the demo environment.')
   );
   bot.command(['alert', 'alertlist', 'alertreset'], (ctx) =>
@@ -62,5 +65,10 @@ export function registerLiteCommands(
   bot.command(['watch', 'watchlist', 'unwatch', 'call', 'giveaway'], (ctx) =>
     ctx.reply('This feature requires a persistent worker. Coming soon!')
   );
-}
 
+  // Friendly fallbacks for heavy features that are not feasible on Netlify Functions
+  bot.hears(/^\s*chart\b/i, (ctx) => ctx.reply('Chart rendering is unavailable in this environment.'));
+  bot.hears(/^\s*heatmap\b/i, (ctx) => ctx.reply('Heatmap is unavailable in this environment.'));
+  bot.command(['alert', 'alertlist', 'alertreset'], (ctx) => ctx.reply('Alerts require a persistent worker.'));
+  bot.command(['watch', 'watchlist', 'unwatch', 'call', 'giveaway', 'dev'], (ctx) => ctx.reply('This command requires a persistent worker.'));
+}
