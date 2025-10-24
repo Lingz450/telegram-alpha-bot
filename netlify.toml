@@ -6,3 +6,9 @@
 
 [functions]
   node_bundler = "esbuild"
+
+# Clean webhook path so your function isn't exposed
+[[redirects]]
+  from = "/webhook"
+  to = "/.netlify/functions/telegram"
+  status = 200
