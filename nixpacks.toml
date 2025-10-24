@@ -1,0 +1,12 @@
+# Nixpacks configuration for Railway
+# Forces npm install instead of npm ci to avoid lock file sync issues
+
+[phases.install]
+cmds = ["npm install"]
+
+[phases.build]
+cmds = ["npx prisma generate"]
+
+[start]
+cmd = "npx tsx src/worker.ts"
+
